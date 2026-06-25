@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/luxfi/geth/common"
+	"github.com/luxfi/mcp"
 )
 
 // TestPendingOperationsAnnotatesDeadlineAndTruncation is the MEDIUM-5 test. It proves:
@@ -109,9 +109,9 @@ func TestObservationVerifyRejectsChainMismatch(t *testing.T) {
 	ops := genKeys(t, 1)
 	_, env := newEVMChain(t, ops)
 
-	obs, err := newObservation(context.Background(), env.c, toolChainState, nil)
+	obs, err := mcp.NewObservation(context.Background(), env.c, toolChainState, nil)
 	if err != nil {
-		t.Fatalf("newObservation: %v", err)
+		t.Fatalf("NewObservation: %v", err)
 	}
 	// Sanity: it verifies on its own chain.
 	if fresh, err := obs.Verify(context.Background(), env.c, 0); err != nil || !fresh {
@@ -119,7 +119,7 @@ func TestObservationVerifyRejectsChainMismatch(t *testing.T) {
 	}
 
 	// Forge a wrong chain id on the observation; Verify must reject as a chain mismatch.
-	wrong := &ChainObservation{
+	wrong := &mcp.ChainObservation{
 		ChainID:     new(big.Int).Add(obs.ChainID, big.NewInt(1)),
 		BlockNumber: obs.BlockNumber,
 		BlockHash:   obs.BlockHash,
@@ -136,63 +136,8 @@ func TestObservationVerifyRejectsChainMismatch(t *testing.T) {
 	t.Logf("chain mismatch correctly rejected: %v", err)
 
 	// A nil chainId is also a mismatch (cannot be trusted).
-	nilCID := &ChainObservation{BlockNumber: obs.BlockNumber, BlockHash: obs.BlockHash, Tool: toolChainState}
+	nilCID := &mcp.ChainObservation{BlockNumber: obs.BlockNumber, BlockHash: obs.BlockHash, Tool: toolChainState}
 	if fresh, _ := nilCID.Verify(context.Background(), env.c, 1000); fresh {
 		t.Fatal("observation with nil chainId passed Verify")
-	}
-}
-
-// TestObservationDedupsDuplicateKeys is the NIT test: an observation whose Reads name the
-// SAME key twice must canonicalize deterministically (last-writer-wins), so two parties
-// cannot produce divergent hashes from a dup-key set, and the dup collapses to one entry.
-func TestObservationDedupsDuplicateKeys(t *testing.T) {
-	mk := func(reads []ObservedFact) *ChainObservation {
-		return &ChainObservation{
-			ChainID:     big.NewInt(7),
-			BlockNumber: 42,
-			BlockHash:   common.HexToHash("0x01"),
-			Timestamp:   1000,
-			Tool:        toolParamValue,
-			Reads:       reads,
-		}
-	}
-	// Two sets that differ only in the ORDER of a duplicated "value" key. Last writer
-	// ("final") must win in BOTH, so the canonical bytes and hash are identical.
-	a := mk([]ObservedFact{
-		{Key: "knobKey", Value: "temp"},
-		{Key: "value", Value: "first"},
-		{Key: "value", Value: "final"},
-	})
-	b := mk([]ObservedFact{
-		{Key: "value", Value: "first"},
-		{Key: "knobKey", Value: "temp"},
-		{Key: "value", Value: "final"},
-	})
-	if string(a.Canonical()) != string(b.Canonical()) {
-		t.Fatalf("dup-key observations not canonical-equal:\n  a=%s\n  b=%s", a.Canonical(), b.Canonical())
-	}
-	if a.Hash() != b.Hash() {
-		t.Fatalf("dup-key observations hashed differently: %s vs %s", a.Hash().Hex(), b.Hash().Hex())
-	}
-
-	// The duplicate must collapse to a single "value" entry equal to the last writer.
-	c := mk([]ObservedFact{
-		{Key: "value", Value: "first"},
-		{Key: "value", Value: "final"},
-	})
-	c.sortReads()
-	count := 0
-	var kept string
-	for _, r := range c.Reads {
-		if r.Key == "value" {
-			count++
-			kept = r.Value
-		}
-	}
-	if count != 1 {
-		t.Fatalf("duplicate key not collapsed: %d 'value' entries remain", count)
-	}
-	if kept != "final" {
-		t.Fatalf("last-writer-wins broken: kept %q, want final", kept)
 	}
 }

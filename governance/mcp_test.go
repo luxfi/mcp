@@ -10,11 +10,13 @@ import (
 	"testing"
 
 	"github.com/luxfi/geth/common"
+
+	"github.com/luxfi/mcp"
 )
 
 // callTool runs a read tool and returns its result as a map (all tool results are
 // JSON objects). Fails the test on tool error or wrong shape.
-func callTool(t *testing.T, srv *Server, name string, args map[string]interface{}) map[string]interface{} {
+func callTool(t *testing.T, srv *mcp.Server, name string, args map[string]interface{}) map[string]interface{} {
 	t.Helper()
 	res, err := srv.CallTool(context.Background(), name, args)
 	if err != nil {
@@ -249,22 +251,23 @@ func TestMCPThoughtStatusMatchesAIGovernor(t *testing.T) {
 func TestOperatorVerdictBindsMCPObservedState(t *testing.T) {
 	ops := genKeys(t, 3)
 	_, env := newEVMChain(t, ops)
-	srv := env.mcpServer()
+	g := env.mcpSurface()
 
 	_, spec, knobKey := driveSettledRound(t, env, ops, big.NewInt(333))
 
-	// 1. The operator reads the decided knob via MCP and pins it into an observation.
-	value, decided, err := srv.readParamValue(context.Background(), spec, knobKey)
+	// 1. The operator reads the decided knob via the governance surface and pins it into
+	//    an observation built by the shared mcp package.
+	value, decided, err := g.readParamValue(context.Background(), env.c, spec, knobKey)
 	if err != nil {
 		t.Fatalf("readParamValue: %v", err)
 	}
-	obs1, err := newObservation(context.Background(), env.c, toolParamValue, []ObservedFact{
+	obs1, err := mcp.NewObservation(context.Background(), env.c, toolParamValue, []mcp.ObservedFact{
 		{Key: "knobKey", Value: knobKey},
 		{Key: "value", Value: value.String()},
 		{Key: "decided", Value: boolStr(decided)},
 	})
 	if err != nil {
-		t.Fatalf("newObservation: %v", err)
+		t.Fatalf("NewObservation: %v", err)
 	}
 	boundHash := obs1.Hash()
 
@@ -277,18 +280,18 @@ func TestOperatorVerdictBindsMCPObservedState(t *testing.T) {
 
 	// 3. A checker RE-READS the same chain facts (no new block has been added) and
 	//    re-derives the observation hash; it must equal what the verdict bound.
-	value2, decided2, err := srv.readParamValue(context.Background(), spec, knobKey)
+	value2, decided2, err := g.readParamValue(context.Background(), env.c, spec, knobKey)
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	obs2, err := newObservation(context.Background(), env.c, toolParamValue, []ObservedFact{
+	obs2, err := mcp.NewObservation(context.Background(), env.c, toolParamValue, []mcp.ObservedFact{
 		// Deliberately a different append order to prove canonicalization sorts it.
 		{Key: "value", Value: value2.String()},
 		{Key: "decided", Value: boolStr(decided2)},
 		{Key: "knobKey", Value: knobKey},
 	})
 	if err != nil {
-		t.Fatalf("newObservation re-read: %v", err)
+		t.Fatalf("NewObservation re-read: %v", err)
 	}
 	rederived := obs2.Hash()
 
@@ -302,7 +305,7 @@ func TestOperatorVerdictBindsMCPObservedState(t *testing.T) {
 	}
 
 	// And a verdict claiming a DIFFERENT value must NOT match (binding is meaningful).
-	tampered, _ := newObservation(context.Background(), env.c, toolParamValue, []ObservedFact{
+	tampered, _ := mcp.NewObservation(context.Background(), env.c, toolParamValue, []mcp.ObservedFact{
 		{Key: "knobKey", Value: knobKey},
 		{Key: "value", Value: "999999"}, // lie about the value
 		{Key: "decided", Value: boolStr(decided)},
@@ -320,9 +323,9 @@ func TestStaleMCPObservationRejectedOrFlagged(t *testing.T) {
 	_, env := newEVMChain(t, ops)
 
 	// Observation at the current head.
-	obs, err := newObservation(context.Background(), env.c, toolChainState, nil)
+	obs, err := mcp.NewObservation(context.Background(), env.c, toolChainState, nil)
 	if err != nil {
-		t.Fatalf("newObservation: %v", err)
+		t.Fatalf("NewObservation: %v", err)
 	}
 
 	// Immediately, with zero tolerance, it is fresh.
@@ -354,7 +357,7 @@ func TestStaleMCPObservationRejectedOrFlagged(t *testing.T) {
 
 	// Reorg detection: forge an observation whose recorded blockHash is wrong for its
 	// height. Verify must reject it even within the age window.
-	bad := &ChainObservation{
+	bad := &mcp.ChainObservation{
 		ChainID:     obs.ChainID,
 		BlockNumber: obs.BlockNumber,
 		BlockHash:   common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
@@ -381,13 +384,6 @@ type mockVerdict struct {
 	taskID   *big.Int
 	vote     uint8
 	obsBound common.Hash
-}
-
-func boolStr(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }
 
 // toUint8 coerces a JSON-decoded numeric (uint8 from the tool, or float64 if it

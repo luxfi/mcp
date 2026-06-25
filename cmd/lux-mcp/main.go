@@ -1,10 +1,11 @@
 // Copyright (C) 2019-2025, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// Command aivm-gov-mcp is the drop-in, READ-ONLY governance MCP server binary for
-// the Lux AIVM (A-Chain) governance stack. It reads its EVM RPC URL and the four
-// deployed contract addresses from the environment and serves the eight read tools
-// over stdio (JSON-RPC 2.0). It holds no key and submits no transaction.
+// Command lux-mcp is the drop-in, READ-ONLY governance MCP server binary for the Lux
+// AIVM (A-Chain) governance stack. It reads its EVM RPC URL and the four deployed
+// contract addresses from the environment and serves the governance read tools over
+// stdio (JSON-RPC 2.0) via the shared mcp transport. It holds no key and submits no
+// transaction.
 //
 // Environment:
 //
@@ -16,7 +17,7 @@
 //
 // Drop into an MCP client (hanzo-dev / claude desktop) as a stdio server:
 //
-//	{ "command": "aivm-gov-mcp", "env": { "LUX_GOV_EVM_RPC": "https://…/ext/bc/C/rpc", … } }
+//	{ "command": "lux-mcp", "env": { "LUX_GOV_EVM_RPC": "https://…/ext/bc/C/rpc", … } }
 package main
 
 import (
@@ -27,12 +28,14 @@ import (
 	"syscall"
 
 	"github.com/luxfi/geth/common"
-	governance "github.com/luxfi/mcp/governance"
+
+	"github.com/luxfi/mcp"
+	"github.com/luxfi/mcp/governance"
 )
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "aivm-gov-mcp:", err)
+		fmt.Fprintln(os.Stderr, "lux-mcp:", err)
 		os.Exit(1)
 	}
 }
@@ -46,11 +49,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	srv, err := governance.New(ctx, cfg)
+	surface, err := governance.New(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	return srv.Serve(ctx, os.Stdin, os.Stdout)
+	// One transport, one surface: mcp.Serve runs the read-only stdio loop over the
+	// governance tools. Adding another domain is just another argument here.
+	return mcp.Serve(ctx, os.Stdin, os.Stdout, surface)
 }
 
 func configFromEnv() (governance.Config, error) {
