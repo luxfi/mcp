@@ -10,6 +10,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/luxfi/mcp"
 )
 
 // TestStdioServeRoundTrip exercises the ACTUAL JSON-RPC 2.0 stdio loop (Serve),
@@ -48,11 +50,11 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	}
 	result := init["result"].(map[string]interface{})
 	si := result["serverInfo"].(map[string]interface{})
-	if si["name"] != ServerName {
-		t.Fatalf("serverInfo.name=%v, want %s", si["name"], ServerName)
+	if si["name"] != mcp.ServerName {
+		t.Fatalf("serverInfo.name=%v, want %s", si["name"], mcp.ServerName)
 	}
-	if result["protocolVersion"] != ProtocolVersion {
-		t.Fatalf("protocolVersion=%v, want %s", result["protocolVersion"], ProtocolVersion)
+	if result["protocolVersion"] != mcp.ProtocolVersion {
+		t.Fatalf("protocolVersion=%v, want %s", result["protocolVersion"], mcp.ProtocolVersion)
 	}
 
 	// 2) tools/list: exactly 8 tools.
@@ -72,7 +74,9 @@ func TestStdioServeRoundTrip(t *testing.T) {
 		}
 	}
 
-	// 3) tools/call(chain_state): content[0].text is a JSON object with chainId etc.
+	// 3) tools/call(chain_state): content[0].text is a JSON object carrying the tool VALUE
+	//    plus the verifiable observation. The chain_state fields live under "value"; the
+	//    observation under "observation" (the MED-8 wiring — every result is bindable).
 	call := resps[2]["result"].(map[string]interface{})
 	content := call["content"].([]interface{})
 	if len(content) != 1 {
@@ -82,9 +86,13 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	if block["type"] != "text" {
 		t.Fatalf("content type=%v, want text", block["type"])
 	}
-	var state map[string]interface{}
-	if err := json.Unmarshal([]byte(block["text"].(string)), &state); err != nil {
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(block["text"].(string)), &payload); err != nil {
 		t.Fatalf("chain_state text not JSON: %v", err)
+	}
+	state, ok := payload["value"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tool result missing value object: %v", payload)
 	}
 	wantChainID, _ := env.c.ChainID(context.Background())
 	if state["chainId"] != wantChainID.String() {
@@ -95,6 +103,18 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	}
 	if _, ok := state["blockNumber"]; !ok {
 		t.Fatalf("chain_state missing blockNumber: %v", state)
+	}
+
+	// The observation must be present and carry a binding hash + the tool name.
+	obs, ok := payload["observation"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tool result missing observation object: %v", payload)
+	}
+	if obs["tool"] != "chain_state" {
+		t.Fatalf("observation tool=%v, want chain_state", obs["tool"])
+	}
+	if _, ok := obs["hash"].(string); !ok {
+		t.Fatalf("observation missing binding hash: %v", obs)
 	}
 }
 

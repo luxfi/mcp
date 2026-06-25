@@ -4,42 +4,29 @@
 package governance
 
 import (
-	"context"
-	"fmt"
 	"math/big"
-	"strings"
 
-	"github.com/luxfi/geth/accounts/abi"
 	"github.com/luxfi/geth/common"
-	"github.com/luxfi/geth/core/types"
 
-	gethereum "github.com/luxfi/geth"
+	"github.com/luxfi/mcp/evmread"
 )
 
-// This file holds the minimal, hand-written ABI for the four governance contracts
-// and a single read-only call helper. Only the VIEW functions and the structs the
-// eight read tools touch are declared — the package never packs a state-mutating
-// method, so it has no calldata path that could change chain state. The struct
-// tuple component order/types below mirror the Solidity sources EXACTLY
-// (AIParams.sol, AIGovernor.sol, IAIGovernor.sol, AIThoughtRegistry.sol,
-// AIReputation.sol); the parity tests assert that.
-
-// EthCaller is the minimal, READ-ONLY chain surface this server needs. Both the
-// production *ethclient.Client (dialed in New) and the in-process simulated test
-// backend's Client satisfy it. It deliberately exposes NO transaction-sending
-// method: there is no Send/SendTransaction here, so no caller of this package can
-// submit a tx through it. (Decomplecting, Hickey: the dependency is "a thing that
-// can read the chain", not "a URL" — which is also what makes the tests injectable.)
-type EthCaller interface {
-	CallContract(ctx context.Context, call gethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
-	ChainID(ctx context.Context) (*big.Int, error)
-	BlockNumber(ctx context.Context) (uint64, error)
-	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
-}
+// This file holds the minimal, hand-written ABI for the four governance contracts.
+// Only the VIEW functions and the structs the eight read tools touch are declared —
+// the package never packs a state-mutating method, so it has no calldata path that
+// could change chain state. The struct tuple component order/types below mirror the
+// Solidity sources EXACTLY (AIParams.sol, AIGovernor.sol, IAIGovernor.sol,
+// AIThoughtRegistry.sol, AIReputation.sol); the parity tests assert that.
+//
+// The chain-read mechanics (Caller, Contract.Call, CallStruct, the per-request call
+// ceiling) live in github.com/luxfi/mcp/evmread — the SOLE geth-importing adapter.
+// This package contributes only the domain ABIs and structs and composes them over
+// evmread; it never imports geth's transactor/signing surface.
 
 // ----------------------------------------------------------------------------
 // Solidity-mirror structs. Field ORDER and Go types match the .sol tuple layout
 // exactly so abi.UnpackIntoInterface decodes a returned struct field-for-field.
+// (common.Address and *big.Int are read-only value types — not write-capable.)
 // ----------------------------------------------------------------------------
 
 // Round mirrors AIParams.Round (AIParams.sol struct order).
@@ -231,83 +218,18 @@ const aiReputationABI = `[` +
 	`{"type":"function","stateMutability":"view","name":"agreementRateBps","inputs":[{"name":"operator","type":"address"}],"outputs":[{"name":"","type":"uint32"}]}` +
 	`]`
 
-// boundABI pairs a parsed ABI with the address it is deployed at. A read tool
-// packs a method's calldata, sends it via EthCaller.CallContract (eth_call), and
-// unpacks the return. There is exactly one chain-access verb here (CallContract),
-// which is the read-only eth_call — no path packs or sends a transaction.
-type boundABI struct {
-	abi  abi.ABI
-	addr common.Address
-}
-
-func newBoundABI(jsonABI string, addr common.Address) (*boundABI, error) {
-	parsed, err := abi.JSON(strings.NewReader(jsonABI))
-	if err != nil {
-		return nil, fmt.Errorf("mcp: parse ABI: %w", err)
+// readParamsContract / etc. bind the ABI strings to addresses via evmread. Kept as a
+// tiny constructor set so newServer reads exactly like before but through the adapter.
+func bindContracts(cfg Config) (params, governor, registry, rep *evmread.Contract, err error) {
+	if params, err = evmread.NewContract(aiParamsABI, cfg.AIParams); err != nil {
+		return
 	}
-	return &boundABI{abi: parsed, addr: addr}, nil
-}
-
-// call packs `method`(args...), executes it as a read-only eth_call against the
-// bound address at the latest block, and returns the decoded output values.
-func (b *boundABI) call(ctx context.Context, ec EthCaller, method string, args ...interface{}) ([]interface{}, error) {
-	return b.callAt(ctx, ec, nil, method, args...)
-}
-
-// callAt is `call` pinned to a specific block (nil = latest). Pinning lets a tool
-// that issues SEVERAL reads which must agree (e.g. quorum_status reading verdicts and
-// then each operator's bond) take them all at ONE block, so a state change between the
-// reads — a bond withdraw racing the tally — cannot produce an inconsistent snapshot.
-// The in-process test backend ignores the block arg (it has only latest state); the
-// production *ethclient.Client honors it.
-func (b *boundABI) callAt(ctx context.Context, ec EthCaller, block *big.Int, method string, args ...interface{}) ([]interface{}, error) {
-	m, ok := b.abi.Methods[method]
-	if !ok {
-		return nil, fmt.Errorf("mcp: unknown method %q", method)
+	if governor, err = evmread.NewContract(aiGovernorABI, cfg.AIGovernor); err != nil {
+		return
 	}
-	in, err := b.abi.Pack(method, args...)
-	if err != nil {
-		return nil, fmt.Errorf("mcp: pack %s: %w", method, err)
+	if registry, err = evmread.NewContract(aiThoughtRegistryABI, cfg.AIThoughtRegistry); err != nil {
+		return
 	}
-	out, err := ec.CallContract(ctx, gethereum.CallMsg{To: &b.addr, Data: in}, block)
-	if err != nil {
-		return nil, fmt.Errorf("mcp: eth_call %s @ %s: %w", method, b.addr.Hex(), err)
-	}
-	vals, err := m.Outputs.Unpack(out)
-	if err != nil {
-		return nil, fmt.Errorf("mcp: unpack %s: %w", method, err)
-	}
-	return vals, nil
-}
-
-// callStruct packs `method`(args...), runs the read-only eth_call, and unpacks a
-// SINGLE struct (or slice-of-struct) return into a value of type T, mapping the
-// Solidity tuple field-for-field by position.
-//
-// geth's abi.UnpackIntoInterface special-cases a single output: it treats the
-// destination as a wrapper struct and writes the unpacked value into its FIRST field
-// (Arguments.copyAtomic). So we hand it a one-field wrapper whose field is T; geth
-// then field-copies the tuple into it by index — which is exactly why T's field order
-// MUST mirror the Solidity struct (it does; the parity tests assert it).
-func callStruct[T any](ctx context.Context, b *boundABI, ec EthCaller, method string, args ...interface{}) (T, error) {
-	return callStructAt[T](ctx, b, ec, nil, method, args...)
-}
-
-// callStructAt is `callStruct` pinned to a specific block (nil = latest); see callAt
-// for why pinning matters. quorum_status uses it to read getThought / getVerdicts at
-// the same block it reads the bonds, for a consistent settle-equivalent snapshot.
-func callStructAt[T any](ctx context.Context, b *boundABI, ec EthCaller, block *big.Int, method string, args ...interface{}) (T, error) {
-	var wrap struct{ V T }
-	in, err := b.abi.Pack(method, args...)
-	if err != nil {
-		return wrap.V, fmt.Errorf("mcp: pack %s: %w", method, err)
-	}
-	out, err := ec.CallContract(ctx, gethereum.CallMsg{To: &b.addr, Data: in}, block)
-	if err != nil {
-		return wrap.V, fmt.Errorf("mcp: eth_call %s @ %s: %w", method, b.addr.Hex(), err)
-	}
-	if err := b.abi.UnpackIntoInterface(&wrap, method, out); err != nil {
-		return wrap.V, fmt.Errorf("mcp: unpack %s: %w", method, err)
-	}
-	return wrap.V, nil
+	rep, err = evmread.NewContract(aiReputationABI, cfg.AIReputation)
+	return
 }

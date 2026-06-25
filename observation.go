@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package governance
+package mcp
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 
 	"github.com/luxfi/crypto"
 	"github.com/luxfi/geth/common"
+
+	"github.com/luxfi/mcp/evmread"
 )
 
 // ChainObservation is the verifiable record of WHAT the chain said and WHEN.
@@ -52,10 +54,12 @@ type ObservedFact struct {
 	Value string `json:"value"`
 }
 
-// newObservation builds an observation by reading the current chain head once and
+// NewObservation builds an observation by reading the current chain head once and
 // stamping it with the supplied reads (which the caller has already canonicalized).
-// The reads are sorted by key so the observation is order-independent.
-func newObservation(ctx context.Context, ec EthCaller, tool string, reads []ObservedFact) (*ChainObservation, error) {
+// The reads are sorted by key so the observation is order-independent. A domain tool
+// (e.g. governance) calls this with the exact facts it returned, so its result can be
+// bound into a verdict and re-verified later.
+func NewObservation(ctx context.Context, ec evmread.Caller, tool string, reads []ObservedFact) (*ChainObservation, error) {
 	chainID, err := ec.ChainID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("mcp: observation chainID: %w", err)
@@ -169,7 +173,7 @@ func (o *ChainObservation) Hash() common.Hash {
 // safe to act on. A read error is surfaced as a non-nil error with fresh=false.
 //
 // maxAgeBlocks == 0 means "must be the exact head block" (zero tolerance).
-func (o *ChainObservation) Verify(ctx context.Context, ec EthCaller, maxAgeBlocks uint64) (bool, error) {
+func (o *ChainObservation) Verify(ctx context.Context, ec evmread.Caller, maxAgeBlocks uint64) (bool, error) {
 	// Chain identity: the observation must be checked against the SAME chain it was taken
 	// on. A mismatch means we are pointed at a different network entirely (e.g. testnet vs
 	// mainnet), so block numbers/hashes are not comparable and the observation is invalid

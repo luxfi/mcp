@@ -46,6 +46,8 @@ import (
 	"github.com/luxfi/geth/params"
 
 	gethereum "github.com/luxfi/geth"
+
+	"github.com/luxfi/mcp"
 )
 
 // artifact is the subset of a foundry build artifact we load.
@@ -370,14 +372,25 @@ func (e *chainEnv) deployWithCtor(a abi.ABI, code []byte, args ...interface{}) c
 	return e.c.deploy(append(append([]byte{}, code...), packed...))
 }
 
-// mcpServer builds an MCP Server reading THIS chain through the EthCaller.
-func (e *chainEnv) mcpServer() *Server {
-	srv, err := NewWithCaller(e.c, Config{
+// mcpSurface builds the governance Surface reading THIS chain through the EthCaller.
+func (e *chainEnv) mcpSurface() *Surface {
+	g, err := NewWithCaller(e.c, Config{
 		AIParams:          e.params.addr,
 		AIGovernor:        e.governor.addr,
 		AIThoughtRegistry: e.registry.addr,
 		AIReputation:      e.rep.addr,
 	})
+	if err != nil {
+		e.t.Fatalf("new governance surface: %v", err)
+	}
+	return g
+}
+
+// mcpServer wraps the governance Surface in the shared mcp transport, the way production
+// does (mcp.Serve(ctx, in, out, governance.New(cfg))). Returns the *mcp.Server whose
+// CallTool/Serve/Tools the tests exercise.
+func (e *chainEnv) mcpServer() *mcp.Server {
+	srv, err := mcp.NewServer(e.mcpSurface())
 	if err != nil {
 		e.t.Fatalf("new mcp server: %v", err)
 	}
