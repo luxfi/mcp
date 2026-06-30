@@ -41,7 +41,7 @@ require (
 	github.com/luxfi/consensus v1.25.15 // indirect
 	github.com/luxfi/constants v1.5.8 // indirect
 	github.com/luxfi/container v0.0.4 // indirect
-	github.com/luxfi/corona v0.10.2 // indirect
+	github.com/luxfi/corona v0.10.3 // indirect
 	github.com/luxfi/crypto/ipa v1.2.4 // indirect
 	github.com/luxfi/database v1.19.0 // indirect
 	github.com/luxfi/ids v1.2.15 // indirect
