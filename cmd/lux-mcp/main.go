@@ -17,7 +17,7 @@
 //
 // Drop into an MCP client (hanzo-dev / claude desktop) as a stdio server:
 //
-//	{ "command": "lux-mcp", "env": { "LUX_GOV_EVM_RPC": "https://…/ext/bc/C/rpc", … } }
+//	{ "command": "lux-mcp", "env": { "LUX_GOV_EVM_RPC": "https://…/v1/bc/C/rpc", … } }
 package main
 
 import (
