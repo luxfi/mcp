@@ -65,7 +65,7 @@ func main() {
 func writeSurface(dir, name, blurb string, tools []mcp.Tool) {
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	var b strings.Builder
-	fmt.Fprintf(&b, "---\ntitle: %s\ndescription: %s\n---\n\n", name, inline(blurb))
+	fmt.Fprintf(&b, "---\ntitle: \"%s\"\ndescription: \"%s\"\n---\n\n", name, inline(blurb))
 	b.WriteString("{/* Generated from the MCP tool registry by tools/docgen — edit the tool, not this file. */}\n\n")
 	fmt.Fprintf(&b, "%s\n\n", prose(blurb))
 	for _, t := range tools {
