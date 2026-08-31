@@ -51,7 +51,7 @@ const defaultMaxCallsPerRequest = 1024
 // four are validated in New.
 type Config struct {
 	// EVMRPC is the governance EVM chain's RPC URL — an L1/L2/L3 EVM endpoint or a
-	// …/v1/bc/C/rpc. Dialed read-only via ethclient.DialContext.
+	// …/v1/chain/C/rpc. Dialed read-only via ethclient.DialContext.
 	EVMRPC string
 
 	AIParams          common.Address
