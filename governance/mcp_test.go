@@ -16,13 +16,13 @@ import (
 
 // callTool runs a read tool and returns its result as a map (all tool results are
 // JSON objects). Fails the test on tool error or wrong shape.
-func callTool(t *testing.T, srv *mcp.Server, name string, args map[string]interface{}) map[string]interface{} {
+func callTool(t *testing.T, srv *mcp.Server, name string, args map[string]any) map[string]any {
 	t.Helper()
 	res, err := srv.CallTool(context.Background(), name, args)
 	if err != nil {
 		t.Fatalf("tool %s: %v", name, err)
 	}
-	m, ok := res.(map[string]interface{})
+	m, ok := res.(map[string]any)
 	if !ok {
 		t.Fatalf("tool %s: result not a map: %T", name, res)
 	}
@@ -66,7 +66,7 @@ func TestLiveParamRoundSetsAIParamsValue(t *testing.T) {
 
 	// Before the round settles, the knob is not decided.
 	specPre := specHash("zen-nano-temperature")
-	pre := callTool(t, srv, toolParamValue, map[string]interface{}{
+	pre := callTool(t, srv, toolParamValue, map[string]any{
 		"modelSpecHash": common.BytesToHash(specPre[:]).Hex(),
 		"knobKey":       "temperature",
 	})
@@ -77,7 +77,7 @@ func TestLiveParamRoundSetsAIParamsValue(t *testing.T) {
 	_, spec, knobKey := driveSettledRound(t, env, ops, value)
 
 	// MCP param_value must now reflect the decided value.
-	got := callTool(t, srv, toolParamValue, map[string]interface{}{
+	got := callTool(t, srv, toolParamValue, map[string]any{
 		"modelSpecHash": common.BytesToHash(spec[:]).Hex(),
 		"knobKey":       knobKey,
 	})
@@ -109,7 +109,7 @@ func TestMCPParamHistoryMatchesAIParams(t *testing.T) {
 
 	_, spec, knobKey := driveSettledRound(t, env, ops, big.NewInt(777))
 
-	hist := callTool(t, srv, toolParamHistory, map[string]interface{}{})
+	hist := callTool(t, srv, toolParamHistory, map[string]any{})
 
 	// roundCount parity.
 	rcOut := env.callParams("roundCount")
@@ -118,21 +118,21 @@ func TestMCPParamHistoryMatchesAIParams(t *testing.T) {
 		t.Fatalf("param_history roundCount=%v, want %s", hist["roundCount"], wantCount)
 	}
 
-	rounds, ok := hist["rounds"].([]interface{})
+	rounds, ok := hist["rounds"].([]any)
 	if !ok || len(rounds) == 0 {
 		t.Fatalf("param_history returned no rounds: %v", hist["rounds"])
 	}
 
 	// The newest round (index 0, descending) is roundId wantCount-1. Field parity
 	// against the on-chain getRound.
-	first := rounds[0].(map[string]interface{})
+	first := rounds[0].(map[string]any)
 	roundID := new(big.Int).Sub(wantCount, big.NewInt(1))
 	if first["roundId"] != roundID.String() {
 		t.Fatalf("first round id=%v, want %s", first["roundId"], roundID)
 	}
 
 	onchain := readStruct[Round](t, env.c, env.params, "getRound", roundID)
-	rj := first["round"].(map[string]interface{})
+	rj := first["round"].(map[string]any)
 	if rj["knobKey"] != onchain.KnobKey || onchain.KnobKey != knobKey {
 		t.Fatalf("knobKey mismatch: mcp=%v onchain=%v want=%s", rj["knobKey"], onchain.KnobKey, knobKey)
 	}
@@ -151,12 +151,12 @@ func TestMCPParamHistoryMatchesAIParams(t *testing.T) {
 
 	// Proposals parity: count and each value/operator.
 	onProps := readStruct[[]Proposal](t, env.c, env.params, "getProposals", roundID)
-	mcpProps := first["proposals"].([]interface{})
+	mcpProps := first["proposals"].([]any)
 	if len(mcpProps) != len(onProps) {
 		t.Fatalf("proposals count mismatch: mcp=%d onchain=%d", len(mcpProps), len(onProps))
 	}
 	for i := range onProps {
-		p := mcpProps[i].(map[string]interface{})
+		p := mcpProps[i].(map[string]any)
 		if p["value"] != onProps[i].Value.String() {
 			t.Errorf("proposal[%d] value: mcp=%v onchain=%s", i, p["value"], onProps[i].Value)
 		}
@@ -183,7 +183,7 @@ func TestMCPThoughtStatusMatchesAIGovernor(t *testing.T) {
 	taskID := env.openThought(spec, knobKey, n)
 
 	// While Open: derived status must be "Open".
-	openRes := callTool(t, srv, toolThoughtStatus, map[string]interface{}{"taskId": taskID.String()})
+	openRes := callTool(t, srv, toolThoughtStatus, map[string]any{"taskId": taskID.String()})
 	if openRes["status"] != "Open" {
 		t.Fatalf("open thought status=%v, want Open", openRes["status"])
 	}
@@ -196,7 +196,7 @@ func TestMCPThoughtStatusMatchesAIGovernor(t *testing.T) {
 	env.c.advanceSeconds(2 * 3600) // past the 1h voting window
 	env.settleThought(taskID)
 
-	res := callTool(t, srv, toolThoughtStatus, map[string]interface{}{"taskId": taskID.String()})
+	res := callTool(t, srv, toolThoughtStatus, map[string]any{"taskId": taskID.String()})
 
 	onchain := readStruct[Thought](t, env.c, env.governor, "getThought", taskID)
 
@@ -235,7 +235,7 @@ func TestMCPThoughtStatusMatchesAIGovernor(t *testing.T) {
 	}
 
 	// quorum_status cross-check: unanimous YES means votesFor==n, quorumReached.
-	q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+	q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 	if got := toInt(t, q["votesFor"]); got != int(n) {
 		t.Fatalf("quorum votesFor=%d, want %d", got, n)
 	}
@@ -388,7 +388,7 @@ type mockVerdict struct {
 
 // toUint8 coerces a JSON-decoded numeric (uint8 from the tool, or float64 if it
 // round-tripped through JSON) to uint8.
-func toUint8(t *testing.T, v interface{}) uint8 {
+func toUint8(t *testing.T, v any) uint8 {
 	t.Helper()
 	switch n := v.(type) {
 	case uint8:
@@ -403,7 +403,7 @@ func toUint8(t *testing.T, v interface{}) uint8 {
 	}
 }
 
-func toInt(t *testing.T, v interface{}) int {
+func toInt(t *testing.T, v any) int {
 	t.Helper()
 	switch n := v.(type) {
 	case int:

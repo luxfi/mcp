@@ -1,6 +1,6 @@
 module github.com/luxfi/mcp
 
-go 1.26.4
+go 1.27.1
 
 require (
 	github.com/holiman/uint256 v1.3.2

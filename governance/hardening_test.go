@@ -80,7 +80,7 @@ func TestPerRequestCallCeiling(t *testing.T) {
 
 	// pending_operations with a large limit would normally scan many tasks. The ceiling must
 	// stop it well before taskCount.
-	_, err = srv.CallTool(context.Background(), toolPendingOperations, map[string]interface{}{"limit": 200})
+	_, err = srv.CallTool(context.Background(), toolPendingOperations, map[string]any{"limit": 200})
 	if err == nil {
 		t.Fatal("expected a per-request ceiling error, got nil")
 	}
@@ -101,28 +101,28 @@ func TestPerRequestCallCeiling(t *testing.T) {
 func TestArgInputLengthCapped(t *testing.T) {
 	bigStr := strings.Repeat("9", maxArgStringLen+1)
 	// argString path (knobKey).
-	if _, err := argString(map[string]interface{}{"knobKey": bigStr}, "knobKey"); err == nil {
+	if _, err := argString(map[string]any{"knobKey": bigStr}, "knobKey"); err == nil {
 		t.Fatal("expected argString to reject an over-long string")
 	}
 	// toBigInt string path (task/round ids).
-	if _, err := argUint256(map[string]interface{}{"taskId": bigStr}, "taskId"); err == nil {
+	if _, err := argUint256(map[string]any{"taskId": bigStr}, "taskId"); err == nil {
 		t.Fatal("expected argUint256 to reject an over-long integer string")
 	}
 	// A normal value still works.
-	if _, err := argString(map[string]interface{}{"knobKey": "temperature"}, "knobKey"); err != nil {
+	if _, err := argString(map[string]any{"knobKey": "temperature"}, "knobKey"); err != nil {
 		t.Fatalf("normal knobKey wrongly rejected: %v", err)
 	}
 }
 
 // TestArgLimitClampedToMax is the MEDIUM-4 boundary test: limit is clamped to maxLimit.
 func TestArgLimitClampedToMax(t *testing.T) {
-	if got := argLimit(map[string]interface{}{"limit": float64(1_000_000)}, 16); got != maxLimit {
+	if got := argLimit(map[string]any{"limit": float64(1_000_000)}, 16); got != maxLimit {
 		t.Fatalf("argLimit(1e6)=%d, want clamp to %d", got, maxLimit)
 	}
-	if got := argLimit(map[string]interface{}{}, 16); got != 16 {
+	if got := argLimit(map[string]any{}, 16); got != 16 {
 		t.Fatalf("argLimit(absent)=%d, want default 16", got)
 	}
-	if got := argLimit(map[string]interface{}{"limit": float64(10)}, 16); got != 10 {
+	if got := argLimit(map[string]any{"limit": float64(10)}, 16); got != 10 {
 		t.Fatalf("argLimit(10)=%d, want 10", got)
 	}
 }

@@ -207,7 +207,7 @@ func (c *evmChain) mine() {
 
 // advanceBlocks mines `n` empty blocks (advances number + clock without a tx).
 func (c *evmChain) advanceBlocks(n int) {
-	for i := 0; i < n; i++ {
+	for range n {
 		c.mine()
 	}
 }
@@ -285,7 +285,7 @@ func (c *evmChain) headerTime(n uint64) uint64 {
 
 // readStruct is the harness-side INDEPENDENT struct decode (full artifact ABI),
 // using the same single-output wrapper geth requires (see callStruct in abi.go).
-func readStruct[T any](t *testing.T, c *evmChain, b boundContract, method string, args ...interface{}) T {
+func readStruct[T any](t *testing.T, c *evmChain, b boundContract, method string, args ...any) T {
 	t.Helper()
 	var wrap struct{ V T }
 	in, err := b.abi.Pack(method, args...)
@@ -303,7 +303,7 @@ func readStruct[T any](t *testing.T, c *evmChain, b boundContract, method string
 }
 
 // callViewValues unpacks into a []interface{} (for non-struct returns).
-func (c *evmChain) callViewValues(b boundContract, method string, args ...interface{}) []interface{} {
+func (c *evmChain) callViewValues(b boundContract, method string, args ...any) []any {
 	in, err := b.abi.Pack(method, args...)
 	if err != nil {
 		c.t.Fatalf("pack %s: %v", method, err)
@@ -364,7 +364,7 @@ func (e *chainEnv) deployAll() {
 }
 
 // deployWithCtor packs constructor args, appends to creation bytecode, and deploys.
-func (e *chainEnv) deployWithCtor(a abi.ABI, code []byte, args ...interface{}) common.Address {
+func (e *chainEnv) deployWithCtor(a abi.ABI, code []byte, args ...any) common.Address {
 	packed, err := a.Pack("", args...)
 	if err != nil {
 		e.t.Fatalf("pack ctor: %v", err)
@@ -451,7 +451,7 @@ func (e *chainEnv) settleRound(roundID *big.Int) {
 	e.c.sendTx(e.c.deployer, e.params.addr, in, nil)
 }
 
-func (e *chainEnv) callParams(method string, args ...interface{}) []interface{} {
+func (e *chainEnv) callParams(method string, args ...any) []any {
 	return e.c.callViewValues(e.params, method, args...)
 }
 
@@ -552,7 +552,7 @@ func specHash(label string) [32]byte {
 func genKeys(t *testing.T, n int) []*ecdsa.PrivateKey {
 	t.Helper()
 	keys := make([]*ecdsa.PrivateKey, 0, n)
-	for i := 0; i < n; i++ {
+	for range n {
 		k, err := crypto.GenerateKey()
 		if err != nil {
 			t.Fatalf("gen key: %v", err)

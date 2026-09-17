@@ -35,13 +35,13 @@ func TestPendingOperationsAnnotatesDeadlineAndTruncation(t *testing.T) {
 	// Task 1: open it fresh (deadline in the future) -> Open, deadlinePassed false.
 	t1 := env.openThought(spec, "knob-1", 1)
 
-	res := callTool(t, srv, toolPendingOperations, map[string]interface{}{})
-	pending := res["pending"].([]interface{})
+	res := callTool(t, srv, toolPendingOperations, map[string]any{})
+	pending := res["pending"].([]any)
 
 	// Both tasks are Open, so both appear. Index them by taskId.
-	byID := map[string]map[string]interface{}{}
+	byID := map[string]map[string]any{}
 	for _, p := range pending {
-		m := p.(map[string]interface{})
+		m := p.(map[string]any)
 		byID[m["taskId"].(string)] = m
 	}
 	p0, ok := byID[t0.String()]
@@ -61,13 +61,13 @@ func TestPendingOperationsAnnotatesDeadlineAndTruncation(t *testing.T) {
 
 	// With a tiny limit and only the tail scanned, truncation must be reported honestly.
 	// Open several more tasks so taskCount exceeds a limit=1 window.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		env.openThought(spec, "knob-extra", 1)
 	}
 	// Pass limit as float64 to mirror JSON-decoded args (the real transport path).
-	small := callTool(t, srv, toolPendingOperations, map[string]interface{}{"limit": float64(1)})
+	small := callTool(t, srv, toolPendingOperations, map[string]any{"limit": float64(1)})
 	// We asked for at most 1 result; with many open tasks at the tail it returns 1.
-	if got := len(small["pending"].([]interface{})); got != 1 {
+	if got := len(small["pending"].([]any)); got != 1 {
 		t.Fatalf("limit=1 returned %d pending, want 1", got)
 	}
 	if small["truncated"] != true {
@@ -94,7 +94,7 @@ func TestPendingOperationsNotTruncatedWhenAllScanned(t *testing.T) {
 	env.openThought(spec, "a", 1)
 	env.openThought(spec, "b", 1)
 
-	res := callTool(t, srv, toolPendingOperations, map[string]interface{}{})
+	res := callTool(t, srv, toolPendingOperations, map[string]any{})
 	if res["truncated"] != false {
 		t.Fatalf("truncated=%v, want false (scan reached task 0)", res["truncated"])
 	}

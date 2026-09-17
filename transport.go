@@ -72,8 +72,8 @@ const (
 type Tool struct {
 	Name        string
 	Description string
-	InputSchema map[string]interface{}
-	Read        func(ctx context.Context, args map[string]interface{}) (interface{}, *ChainObservation, error)
+	InputSchema map[string]any
+	Read        func(ctx context.Context, args map[string]any) (any, *ChainObservation, error)
 }
 
 // Surface is a domain's contribution to the transport: a set of read tools. governance/
@@ -159,7 +159,7 @@ type rpcRequest struct {
 type rpcResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
-	Result  interface{}     `json:"result,omitempty"`
+	Result  any             `json:"result,omitempty"`
 	Error   *rpcErr         `json:"error,omitempty"`
 }
 
@@ -180,9 +180,9 @@ const (
 // toolDescriptor is the wire shape of a tool in tools/list (the MCP `inputSchema` key).
 // It is projected from a Tool value so the handler closure is never serialized.
 type toolDescriptor struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 // content is one MCP tool-result content block. Tool results are returned as a single
@@ -296,7 +296,7 @@ func (s *Server) handle(ctx context.Context, line []byte) *rpcResponse {
 		if isNotification {
 			return nil
 		}
-		return okResp(req.ID, map[string]interface{}{"tools": s.toolDescriptors()})
+		return okResp(req.ID, map[string]any{"tools": s.toolDescriptors()})
 	case "tools/call":
 		if isNotification {
 			return nil
@@ -310,13 +310,13 @@ func (s *Server) handle(ctx context.Context, line []byte) *rpcResponse {
 	}
 }
 
-func (s *Server) initializeResult() map[string]interface{} {
-	return map[string]interface{}{
+func (s *Server) initializeResult() map[string]any {
+	return map[string]any{
 		"protocolVersion": ProtocolVersion,
-		"capabilities": map[string]interface{}{
-			"tools": map[string]interface{}{},
+		"capabilities": map[string]any{
+			"tools": map[string]any{},
 		},
-		"serverInfo": map[string]interface{}{
+		"serverInfo": map[string]any{
 			"name":    ServerName,
 			"version": ServerVersion,
 		},
@@ -335,8 +335,8 @@ func (s *Server) toolDescriptors() []toolDescriptor {
 
 // toolCallParams is the MCP tools/call params shape.
 type toolCallParams struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
 }
 
 func (s *Server) handleToolsCall(ctx context.Context, id json.RawMessage, raw json.RawMessage) *rpcResponse {
@@ -353,7 +353,7 @@ func (s *Server) handleToolsCall(ctx context.Context, id json.RawMessage, raw js
 		// MCP response with isError=true so the client model sees the failure text (per
 		// MCP tool-result convention), not as a JSON-RPC protocol error, and the stdio
 		// loop keeps serving the next request.
-		return okResp(id, map[string]interface{}{
+		return okResp(id, map[string]any{
 			"content": []content{{Type: "text", Text: err.Error()}},
 			"isError": true,
 		})
@@ -361,7 +361,7 @@ func (s *Server) handleToolsCall(ctx context.Context, id json.RawMessage, raw js
 	// Embed the value AND (when present) the verifiable observation in the tool-result
 	// content, so a caller can read the value and independently re-derive/verify the
 	// observation hash against the chain state it claims.
-	payload := map[string]interface{}{"value": result}
+	payload := map[string]any{"value": result}
 	if obs != nil {
 		payload["observation"] = observationView(obs)
 	}
@@ -369,7 +369,7 @@ func (s *Server) handleToolsCall(ctx context.Context, id json.RawMessage, raw js
 	if merr != nil {
 		return errResp(id, codeInternalError, "encode result: "+merr.Error())
 	}
-	return okResp(id, map[string]interface{}{
+	return okResp(id, map[string]any{
 		"content": []content{{Type: "text", Text: string(encoded)}},
 	})
 }
@@ -377,8 +377,8 @@ func (s *Server) handleToolsCall(ctx context.Context, id json.RawMessage, raw js
 // observationView is the JSON shape of an observation embedded in a tool result: the
 // block context, the tool name, the sorted/deduped reads, and the binding hash. A caller
 // re-derives the hash from these reads via NewObservation/Hash to check the binding.
-func observationView(o *ChainObservation) map[string]interface{} {
-	return map[string]interface{}{
+func observationView(o *ChainObservation) map[string]any {
+	return map[string]any{
 		"chainId":     bigString(o.ChainID),
 		"blockNumber": o.BlockNumber,
 		"blockHash":   o.BlockHash.Hex(),
@@ -396,13 +396,13 @@ func observationView(o *ChainObservation) map[string]interface{} {
 // the domain's Read closure, not here, so the transport stays chain-agnostic. Used by
 // both the stdio path and CallTool, so the invariants hold no matter how a tool is
 // invoked.
-func (s *Server) dispatch(parent context.Context, name string, args map[string]interface{}) (result interface{}, obs *ChainObservation, err error) {
+func (s *Server) dispatch(parent context.Context, name string, args map[string]any) (result any, obs *ChainObservation, err error) {
 	t, ok := s.tools[name]
 	if !ok {
 		return nil, nil, fmt.Errorf("mcp: unknown tool %q", name)
 	}
 	if args == nil {
-		args = map[string]interface{}{}
+		args = map[string]any{}
 	}
 	ctx := parent
 	var cancel context.CancelFunc
@@ -424,7 +424,7 @@ func (s *Server) dispatch(parent context.Context, name string, args map[string]i
 // decoded result VALUE. Exposed for in-process callers and tests; it is read-only like
 // every tool. The observation is dropped here (in-process callers that want it can build
 // it from the same reads); CallToolObserved returns both. Unknown tool names error.
-func (s *Server) CallTool(ctx context.Context, name string, args map[string]interface{}) (interface{}, error) {
+func (s *Server) CallTool(ctx context.Context, name string, args map[string]any) (any, error) {
 	v, _, err := s.dispatch(ctx, name, args)
 	return v, err
 }
@@ -432,14 +432,14 @@ func (s *Server) CallTool(ctx context.Context, name string, args map[string]inte
 // CallToolObserved runs a read tool and returns BOTH its value and the observation it
 // produced (nil when the tool observes nothing). Exposed for callers that bind the
 // observation into a verdict.
-func (s *Server) CallToolObserved(ctx context.Context, name string, args map[string]interface{}) (interface{}, *ChainObservation, error) {
+func (s *Server) CallToolObserved(ctx context.Context, name string, args map[string]any) (any, *ChainObservation, error) {
 	return s.dispatch(ctx, name, args)
 }
 
 // Tools returns the descriptors for the registered read tools (the tools/list surface).
 func (s *Server) Tools() []Tool { return s.descs }
 
-func okResp(id json.RawMessage, result interface{}) *rpcResponse {
+func okResp(id json.RawMessage, result any) *rpcResponse {
 	return &rpcResponse{JSONRPC: "2.0", ID: id, Result: result}
 }
 
@@ -447,7 +447,7 @@ func errResp(id json.RawMessage, code int, msg string) *rpcResponse {
 	return &rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcErr{Code: code, Message: msg}}
 }
 
-func writeJSONLine(w io.Writer, v interface{}) error {
+func writeJSONLine(w io.Writer, v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err

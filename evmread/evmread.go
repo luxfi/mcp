@@ -64,7 +64,7 @@ func NewContract(jsonABI string, addr common.Address) (*Contract, error) {
 
 // Call packs `method`(args...), executes it as a read-only eth_call against the bound
 // address at the latest block, and returns the decoded output values.
-func (c *Contract) Call(ctx context.Context, ec Caller, method string, args ...interface{}) ([]interface{}, error) {
+func (c *Contract) Call(ctx context.Context, ec Caller, method string, args ...any) ([]any, error) {
 	return c.CallAt(ctx, ec, nil, method, args...)
 }
 
@@ -74,7 +74,7 @@ func (c *Contract) Call(ctx context.Context, ec Caller, method string, args ...i
 // — a bond withdraw racing the tally — cannot produce an inconsistent snapshot. An
 // in-process test backend may ignore the block arg (it has only latest state); the
 // production *ethclient.Client honors it.
-func (c *Contract) CallAt(ctx context.Context, ec Caller, block *big.Int, method string, args ...interface{}) ([]interface{}, error) {
+func (c *Contract) CallAt(ctx context.Context, ec Caller, block *big.Int, method string, args ...any) ([]any, error) {
 	m, ok := c.abi.Methods[method]
 	if !ok {
 		return nil, fmt.Errorf("evmread: unknown method %q", method)
@@ -103,14 +103,14 @@ func (c *Contract) CallAt(ctx context.Context, ec Caller, block *big.Int, method
 // (Arguments.copyAtomic). So we hand it a one-field wrapper whose field is T; geth then
 // field-copies the tuple into it by index — which is exactly why T's field order MUST
 // mirror the Solidity struct.
-func CallStruct[T any](ctx context.Context, c *Contract, ec Caller, method string, args ...interface{}) (T, error) {
+func CallStruct[T any](ctx context.Context, c *Contract, ec Caller, method string, args ...any) (T, error) {
 	return CallStructAt[T](ctx, c, ec, nil, method, args...)
 }
 
 // CallStructAt is CallStruct pinned to a specific block (nil = latest); see CallAt for
 // why pinning matters. A quorum tally uses it to read getThought / getVerdicts at the
 // same block it reads the bonds, for a consistent settle-equivalent snapshot.
-func CallStructAt[T any](ctx context.Context, c *Contract, ec Caller, block *big.Int, method string, args ...interface{}) (T, error) {
+func CallStructAt[T any](ctx context.Context, c *Contract, ec Caller, block *big.Int, method string, args ...any) (T, error) {
 	var wrap struct{ V T }
 	in, err := c.abi.Pack(method, args...)
 	if err != nil {

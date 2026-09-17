@@ -85,8 +85,8 @@ func (g *Surface) Tools() []mcp.Tool {
 	// run executes a body against a fresh per-request bounded caller and builds the
 	// observation from the facts it returned (closing MED-8: every tool returns a
 	// ChainObservation of its exact reads). The ceiling lives in the bounded caller.
-	run := func(name string, body func(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error)) func(context.Context, map[string]interface{}) (interface{}, *mcp.ChainObservation, error) {
-		return func(ctx context.Context, args map[string]interface{}) (interface{}, *mcp.ChainObservation, error) {
+	run := func(name string, body func(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error)) func(context.Context, map[string]any) (any, *mcp.ChainObservation, error) {
+		return func(ctx context.Context, args map[string]any) (any, *mcp.ChainObservation, error) {
 			ec := g.bounded()
 			val, reads, err := body(ctx, ec, args)
 			if err != nil {
@@ -110,7 +110,7 @@ func (g *Surface) Tools() []mcp.Tool {
 		{
 			Name:        toolParamValue,
 			Description: "Read a decided governance knob value from AIParams.valueOf(modelSpecHash, knobKey). Returns {value, decided}.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"modelSpecHash": strSchema("bytes32 model spec hash, 0x-hex"),
 				"knobKey":       strSchema("knob key string"),
 			}, []string{"modelSpecHash", "knobKey"}),
@@ -119,7 +119,7 @@ func (g *Surface) Tools() []mcp.Tool {
 		{
 			Name:        toolParamHistory,
 			Description: "AIParams round history (newest first): each round with its proposals. Optional limit (default 16) and fromRound.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"limit":     intSchema("max rounds to return (default 16)"),
 				"fromRound": intSchema("highest round id to start from (default roundCount-1)"),
 			}, nil),
@@ -128,7 +128,7 @@ func (g *Surface) Tools() []mcp.Tool {
 		{
 			Name:        toolThoughtStatus,
 			Description: "AIGovernor.getThought(taskId) fields plus a derived status (Open/Settled/NoQuorum) and taskCount.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"taskId": intSchema("task id"),
 			}, []string{"taskId"}),
 			Read: run(toolThoughtStatus, g.toolThoughtStatus),
@@ -136,7 +136,7 @@ func (g *Surface) Tools() []mcp.Tool {
 		{
 			Name:        toolReceiptLookup,
 			Description: "AIThoughtRegistry receipt lookup by receiptId. Returns {exists, receipt, receiptCount}.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"receiptId": strSchema("bytes32 receipt id, 0x-hex"),
 			}, []string{"receiptId"}),
 			Read: run(toolReceiptLookup, g.toolReceiptLookup),
@@ -150,7 +150,7 @@ func (g *Surface) Tools() []mcp.Tool {
 				"winningIsApprove (winning vote == Yes), deadlinePassed and settleable " +
 				"(quorum reached AND deadline passed — settle reverts before the deadline). " +
 				"Also returns verdictsTotal/verdictsCounted/droppedUnbonded and observedBlock.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"taskId": intSchema("task id"),
 			}, []string{"taskId"}),
 			Read: run(toolQuorumStatus, g.toolQuorumStatus),
@@ -158,7 +158,7 @@ func (g *Surface) Tools() []mcp.Tool {
 		{
 			Name:        toolOperatorReputation,
 			Description: "Operator standing: {isOperator, bond, weight, agreementRateBps, rep} from AIGovernor and AIReputation.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"operator": strSchema("operator address, 0x-hex"),
 			}, []string{"operator"}),
 			Read: run(toolOperatorReputation, g.toolOperatorReputation),
@@ -171,7 +171,7 @@ func (g *Surface) Tools() []mcp.Tool {
 				"inspected (range scannedFrom..taskCount-1). Each entry carries deadlinePassed " +
 				"(now >= deadline) so a still-Open task whose voting window has closed is visible as " +
 				"settle-ready. Also returns observedBlock.",
-			InputSchema: objSchema(map[string]interface{}{
+			InputSchema: objSchema(map[string]any{
 				"limit": intSchema("max open thoughts to return (default 16)"),
 			}, nil),
 			Read: run(toolPendingOperations, g.toolPendingOperations),
@@ -183,7 +183,7 @@ func (g *Surface) Tools() []mcp.Tool {
 // 1. chain_state
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolChainState(ctx context.Context, ec evmread.Caller, _ map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolChainState(ctx context.Context, ec evmread.Caller, _ map[string]any) (any, []mcp.ObservedFact, error) {
 	chainID, err := ec.ChainID(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("chain_state: chainID: %w", err)
@@ -196,7 +196,7 @@ func (g *Surface) toolChainState(ctx context.Context, ec evmread.Caller, _ map[s
 	if err != nil {
 		return nil, nil, fmt.Errorf("chain_state: header: %w", err)
 	}
-	val := map[string]interface{}{
+	val := map[string]any{
 		"chainId":     chainID.String(),
 		"blockNumber": bn,
 		"blockHash":   hdr.Hash().Hex(),
@@ -215,7 +215,7 @@ func (g *Surface) toolChainState(ctx context.Context, ec evmread.Caller, _ map[s
 // 2. param_value
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolParamValue(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolParamValue(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	spec, err := argBytes32(args, "modelSpecHash")
 	if err != nil {
 		return nil, nil, err
@@ -228,7 +228,7 @@ func (g *Surface) toolParamValue(ctx context.Context, ec evmread.Caller, args ma
 	if err != nil {
 		return nil, nil, err
 	}
-	val := map[string]interface{}{
+	val := map[string]any{
 		"value":   value.String(),
 		"decided": decided,
 	}
@@ -264,7 +264,7 @@ func (g *Surface) readParamValue(ctx context.Context, ec evmread.Caller, spec [3
 // 3. param_history
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolParamHistory(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolParamHistory(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	limit := argLimit(args, defaultLimit)
 	count, err := g.readRoundCount(ctx, ec)
 	if err != nil {
@@ -274,7 +274,7 @@ func (g *Surface) toolParamHistory(ctx context.Context, ec evmread.Caller, args 
 	if err != nil {
 		return nil, nil, err
 	}
-	val := map[string]interface{}{
+	val := map[string]any{
 		"roundCount": count.String(),
 		"rounds":     rounds,
 	}
@@ -300,8 +300,8 @@ func (g *Surface) readRoundCount(ctx context.Context, ec evmread.Caller) (*big.I
 // readParamHistory walks rounds DESCENDING from `from` (inclusive), capped at limit,
 // returning each round's fields and its proposals. `from` defaults to count-1 when not
 // supplied by the caller; rounds beyond count-1 are clamped.
-func (g *Surface) readParamHistory(ctx context.Context, ec evmread.Caller, count, from *big.Int, limit int) ([]interface{}, error) {
-	out := []interface{}{}
+func (g *Surface) readParamHistory(ctx context.Context, ec evmread.Caller, count, from *big.Int, limit int) ([]any, error) {
+	out := []any{}
 	if count.Sign() == 0 {
 		return out, nil
 	}
@@ -319,7 +319,7 @@ func (g *Surface) readParamHistory(ctx context.Context, ec evmread.Caller, count
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"roundId":   new(big.Int).Set(i).String(),
 			"round":     roundJSON(round),
 			"proposals": proposalsJSON(proposals),
@@ -344,7 +344,7 @@ func (g *Surface) readProposals(ctx context.Context, ec evmread.Caller, roundID 
 // 4. thought_status
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolThoughtStatus(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolThoughtStatus(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	taskID, err := argUint256(args, "taskId")
 	if err != nil {
 		return nil, nil, err
@@ -390,7 +390,7 @@ func derivedStatus(status uint8) string {
 // 5. receipt_lookup
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolReceiptLookup(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolReceiptLookup(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	id, err := argBytes32(args, "receiptId")
 	if err != nil {
 		return nil, nil, err
@@ -411,7 +411,7 @@ func (g *Surface) toolReceiptLookup(ctx context.Context, ec evmread.Caller, args
 	if !ok {
 		return nil, nil, fmt.Errorf("receipt_lookup: receiptCount not *big.Int")
 	}
-	res := map[string]interface{}{
+	res := map[string]any{
 		"exists":       exists,
 		"receiptCount": count.String(),
 	}
@@ -434,7 +434,7 @@ func (g *Surface) toolReceiptLookup(ctx context.Context, ec evmread.Caller, args
 // 6. quorum_status
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolQuorumStatus(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolQuorumStatus(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	taskID, err := argUint256(args, "taskId")
 	if err != nil {
 		return nil, nil, err
@@ -474,7 +474,7 @@ func (g *Surface) toolQuorumStatus(ctx context.Context, ec evmread.Caller, args 
 	// settle, the only gate — there is no full-committee early exit in the code path). So a
 	// quorum is only ACTUALLY settleable once the deadline has passed.
 	deadlinePassed := now >= t.Deadline
-	val := map[string]interface{}{
+	val := map[string]any{
 		"verdicts":         verdictsJSON(verdicts),
 		"threshold":        t.Threshold,
 		"deadline":         t.Deadline,
@@ -649,7 +649,7 @@ func tallyQuorum(verdicts []Verdict, threshold uint8, bonded map[common.Address]
 // 7. operator_reputation
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolOperatorReputation(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolOperatorReputation(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	op, err := argAddress(args, "operator")
 	if err != nil {
 		return nil, nil, err
@@ -690,7 +690,7 @@ func (g *Surface) toolOperatorReputation(ctx context.Context, ec evmread.Caller,
 	if err != nil {
 		return nil, nil, err
 	}
-	val := map[string]interface{}{
+	val := map[string]any{
 		"isOperator":       isOp,
 		"bond":             bond.String(),
 		"weight":           weight,
@@ -711,7 +711,7 @@ func (g *Surface) toolOperatorReputation(ctx context.Context, ec evmread.Caller,
 // 8. pending_operations
 // ----------------------------------------------------------------------------
 
-func (g *Surface) toolPendingOperations(ctx context.Context, ec evmread.Caller, args map[string]interface{}) (interface{}, []mcp.ObservedFact, error) {
+func (g *Surface) toolPendingOperations(ctx context.Context, ec evmread.Caller, args map[string]any) (any, []mcp.ObservedFact, error) {
 	limit := argLimit(args, defaultLimit)
 	// Pin reads to one block so taskCount, each thought, and the "now" used for the
 	// deadlinePassed flag all reflect the same chain point.
@@ -731,7 +731,7 @@ func (g *Surface) toolPendingOperations(ctx context.Context, ec evmread.Caller, 
 	if err != nil {
 		return nil, nil, err
 	}
-	val := map[string]interface{}{
+	val := map[string]any{
 		"taskCount": count.String(),
 		"pending":   open,
 		// truncated is true when OLDER tasks below the scanned window were NOT inspected, so
@@ -759,16 +759,13 @@ func (g *Surface) toolPendingOperations(ctx context.Context, ec evmread.Caller, 
 // truncated=true when the scan stopped above task 0 (older tasks were not inspected), and
 // the lowest task id scanned. The bounded window plus the per-request eth_call ceiling keep
 // a huge taskCount from issuing an unbounded scan.
-func (g *Surface) readPendingOperations(ctx context.Context, ec evmread.Caller, block, count *big.Int, limit int, now uint64) ([]interface{}, bool, *big.Int, error) {
-	out := []interface{}{}
+func (g *Surface) readPendingOperations(ctx context.Context, ec evmread.Caller, block, count *big.Int, limit int, now uint64) ([]any, bool, *big.Int, error) {
+	out := []any{}
 	last := new(big.Int).Sub(count, big.NewInt(1))
 	if count.Sign() == 0 {
 		return out, false, big.NewInt(0), nil
 	}
-	scanWindow := int64(limit)
-	if scanWindow < pendingScanFloor {
-		scanWindow = pendingScanFloor
-	}
+	scanWindow := max(int64(limit), pendingScanFloor)
 	floor := new(big.Int).Sub(last, big.NewInt(scanWindow-1))
 	if floor.Sign() < 0 {
 		floor = big.NewInt(0)
@@ -814,8 +811,8 @@ func (g *Surface) readTaskCountAt(ctx context.Context, ec evmread.Caller, block 
 // JSON projections — stable, all-scalar renderings of the mirror structs.
 // ----------------------------------------------------------------------------
 
-func roundJSON(r *Round) map[string]interface{} {
-	return map[string]interface{}{
+func roundJSON(r *Round) map[string]any {
+	return map[string]any{
 		"modelSpecHash":   hexBytes32(r.ModelSpecHash),
 		"promptHash":      hexBytes32(r.PromptHash),
 		"knobKey":         r.KnobKey,
@@ -833,10 +830,10 @@ func roundJSON(r *Round) map[string]interface{} {
 	}
 }
 
-func proposalsJSON(ps []Proposal) []interface{} {
-	out := make([]interface{}, 0, len(ps))
+func proposalsJSON(ps []Proposal) []any {
+	out := make([]any, 0, len(ps))
 	for i := range ps {
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"operator":         ps[i].Operator.Hex(),
 			"value":            bigString(ps[i].Value),
 			"confidenceBucket": ps[i].ConfidenceBucket,
@@ -847,8 +844,8 @@ func proposalsJSON(ps []Proposal) []interface{} {
 	return out
 }
 
-func thoughtJSON(t *Thought) map[string]interface{} {
-	return map[string]interface{}{
+func thoughtJSON(t *Thought) map[string]any {
+	return map[string]any{
 		"modelSpecHash":   hexBytes32(t.ModelSpecHash),
 		"promptHash":      hexBytes32(t.PromptHash),
 		"evidenceHash":    hexBytes32(t.EvidenceHash),
@@ -870,10 +867,10 @@ func thoughtJSON(t *Thought) map[string]interface{} {
 	}
 }
 
-func verdictsJSON(vs []Verdict) []interface{} {
-	out := make([]interface{}, 0, len(vs))
+func verdictsJSON(vs []Verdict) []any {
+	out := make([]any, 0, len(vs))
 	for i := range vs {
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"operator":         vs[i].Operator.Hex(),
 			"vote":             vs[i].Vote,
 			"confidenceBucket": vs[i].ConfidenceBucket,
@@ -884,8 +881,8 @@ func verdictsJSON(vs []Verdict) []interface{} {
 	return out
 }
 
-func receiptJSON(rc *ThoughtReceipt) map[string]interface{} {
-	return map[string]interface{}{
+func receiptJSON(rc *ThoughtReceipt) map[string]any {
+	return map[string]any{
 		"modelId":      hexBytes32(rc.ModelId),
 		"promptHash":   hexBytes32(rc.PromptHash),
 		"outputHash":   hexBytes32(rc.OutputHash),
@@ -899,8 +896,8 @@ func receiptJSON(rc *ThoughtReceipt) map[string]interface{} {
 	}
 }
 
-func repJSON(r *Rep) map[string]interface{} {
-	return map[string]interface{}{
+func repJSON(r *Rep) map[string]any {
+	return map[string]any{
 		"weightBps":    r.WeightBps,
 		"participated": r.Participated,
 		"agreed":       r.Agreed,

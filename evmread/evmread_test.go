@@ -53,7 +53,7 @@ func TestBoundedEnforcesCeiling(t *testing.T) {
 	cc := &countingCaller{ret: common.LeftPadBytes(big.NewInt(7).Bytes(), 32)}
 	b := NewBounded(cc, max)
 
-	for i := 0; i < max; i++ {
+	for i := range max {
 		if _, err := b.CallContract(context.Background(), gethereum.CallMsg{To: &common.Address{}}, nil); err != nil {
 			t.Fatalf("call %d under the ceiling errored: %v", i, err)
 		}
@@ -90,7 +90,7 @@ func TestBoundedEnforcesCeiling(t *testing.T) {
 func TestBoundedZeroMaxDisablesCeiling(t *testing.T) {
 	cc := &countingCaller{ret: common.LeftPadBytes(big.NewInt(1).Bytes(), 32)}
 	b := NewBounded(cc, 0)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		if _, err := b.CallContract(context.Background(), gethereum.CallMsg{To: &common.Address{}}, nil); err != nil {
 			t.Fatalf("unbounded call %d errored: %v", i, err)
 		}

@@ -24,7 +24,7 @@ import (
 const maxArgStringLen = 4096
 
 // argString returns a required string argument, rejecting absurdly long inputs.
-func argString(args map[string]interface{}, name string) (string, error) {
+func argString(args map[string]any, name string) (string, error) {
 	v, ok := args[name]
 	if !ok {
 		return "", fmt.Errorf("%s: missing required argument %q", "args", name)
@@ -40,7 +40,7 @@ func argString(args map[string]interface{}, name string) (string, error) {
 }
 
 // argBytes32 parses a required 0x-hex bytes32 argument.
-func argBytes32(args map[string]interface{}, name string) ([32]byte, error) {
+func argBytes32(args map[string]any, name string) ([32]byte, error) {
 	var out [32]byte
 	s, err := argString(args, name)
 	if err != nil {
@@ -58,7 +58,7 @@ func argBytes32(args map[string]interface{}, name string) ([32]byte, error) {
 }
 
 // argAddress parses a required 0x-hex address argument.
-func argAddress(args map[string]interface{}, name string) (common.Address, error) {
+func argAddress(args map[string]any, name string) (common.Address, error) {
 	s, err := argString(args, name)
 	if err != nil {
 		return common.Address{}, err
@@ -72,7 +72,7 @@ func argAddress(args map[string]interface{}, name string) (common.Address, error
 
 // argUint256 parses a required unsigned integer (used for task/round ids). Accepts a
 // JSON number, a decimal string, or a 0x-hex string. Negative values are rejected.
-func argUint256(args map[string]interface{}, name string) (*big.Int, error) {
+func argUint256(args map[string]any, name string) (*big.Int, error) {
 	v, ok := args[name]
 	if !ok {
 		return nil, fmt.Errorf("args: missing required argument %q", name)
@@ -96,7 +96,7 @@ const maxLimit = 256
 // argLimit reads an optional positive "limit" argument, falling back to def. A
 // non-positive or absent limit yields def; anything over maxLimit is clamped to maxLimit
 // so a caller cannot force an unbounded scan.
-func argLimit(args map[string]interface{}, def int) int {
+func argLimit(args map[string]any, def int) int {
 	v, ok := args["limit"]
 	if !ok {
 		return def
@@ -113,7 +113,7 @@ func argLimit(args map[string]interface{}, def int) int {
 
 // argFromRound reads the optional "fromRound" argument; nil (use default) when
 // absent or unparseable. Clamped to <= count-1 by the caller.
-func argFromRound(args map[string]interface{}, count *big.Int) *big.Int {
+func argFromRound(args map[string]any, count *big.Int) *big.Int {
 	v, ok := args["fromRound"]
 	if !ok {
 		return nil
@@ -127,7 +127,7 @@ func argFromRound(args map[string]interface{}, count *big.Int) *big.Int {
 
 // toBigInt converts a decoded-JSON value (float64, json.Number, or string) to a
 // *big.Int. Floats must be integral. Strings may be decimal or 0x-hex.
-func toBigInt(v interface{}) (*big.Int, error) {
+func toBigInt(v any) (*big.Int, error) {
 	switch t := v.(type) {
 	case float64:
 		if t != float64(int64(t)) {
@@ -176,11 +176,11 @@ func ensure0x(s string) string {
 // JSON-schema helpers for the tool descriptors (tools/list inputSchema).
 // ----------------------------------------------------------------------------
 
-func objSchema(props map[string]interface{}, required []string) map[string]interface{} {
+func objSchema(props map[string]any, required []string) map[string]any {
 	if props == nil {
-		props = map[string]interface{}{}
+		props = map[string]any{}
 	}
-	schema := map[string]interface{}{
+	schema := map[string]any{
 		"type":       "object",
 		"properties": props,
 	}
@@ -190,10 +190,10 @@ func objSchema(props map[string]interface{}, required []string) map[string]inter
 	return schema
 }
 
-func strSchema(desc string) map[string]interface{} {
-	return map[string]interface{}{"type": "string", "description": desc}
+func strSchema(desc string) map[string]any {
+	return map[string]any{"type": "string", "description": desc}
 }
 
-func intSchema(desc string) map[string]interface{} {
-	return map[string]interface{}{"type": "integer", "description": desc}
+func intSchema(desc string) map[string]any {
+	return map[string]any{"type": "integer", "description": desc}
 }

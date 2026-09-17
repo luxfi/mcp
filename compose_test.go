@@ -24,9 +24,9 @@ func (pingSurface) Tools() []mcp.Tool {
 	return []mcp.Tool{{
 		Name:        "ping",
 		Description: "returns pong",
-		InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
-		Read: func(_ context.Context, _ map[string]interface{}) (interface{}, *mcp.ChainObservation, error) {
-			return map[string]interface{}{"pong": true}, nil, nil
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Read: func(_ context.Context, _ map[string]any) (any, *mcp.ChainObservation, error) {
+			return map[string]any{"pong": true}, nil, nil
 		},
 	}}
 }
@@ -81,7 +81,7 @@ func TestTransportComposesMultipleSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dispatch ping: %v", err)
 	}
-	m, ok := res.(map[string]interface{})
+	m, ok := res.(map[string]any)
 	if !ok || m["pong"] != true {
 		t.Fatalf("ping result=%v, want {pong:true}", res)
 	}
@@ -90,7 +90,7 @@ func TestTransportComposesMultipleSurfaces(t *testing.T) {
 	// a tool whose error path is reached without a live chain read returning bad bytes:
 	// param_value with a malformed argument fails at argument validation (boundary), proving
 	// the governance tool was dispatched (not "unknown tool").
-	_, err = srv.CallTool(context.Background(), "param_value", map[string]interface{}{})
+	_, err = srv.CallTool(context.Background(), "param_value", map[string]any{})
 	if err == nil {
 		t.Fatal("expected param_value to fail on missing args (proving it dispatched), got nil")
 	}

@@ -74,7 +74,7 @@ func TestQuorumStatusMatchesSettleAfterWithdrawRace(t *testing.T) {
 
 		// BEFORE any withdrawal, MCP must see a real quorum (sanity: the fix didn't break
 		// the honest case).
-		qBefore := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+		qBefore := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 		if qBefore["quorumReached"] != true {
 			t.Fatalf("pre-withdraw quorumReached=%v, want true", qBefore["quorumReached"])
 		}
@@ -92,7 +92,7 @@ func TestQuorumStatusMatchesSettleAfterWithdrawRace(t *testing.T) {
 
 		// MCP quorum_status must now report quorumReached=FALSE (matching settle), and
 		// account for the two dropped verdicts.
-		q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+		q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 		if q["quorumReached"] != false {
 			t.Fatalf("post-withdraw quorumReached=%v, want false (settle will drop unbonded verdicts)", q["quorumReached"])
 		}
@@ -118,7 +118,7 @@ func TestQuorumStatusMatchesSettleAfterWithdrawRace(t *testing.T) {
 		}
 
 		// And thought_status now reads NoQuorum, consistent with the prediction.
-		ts := callTool(t, srv, toolThoughtStatus, map[string]interface{}{"taskId": taskID.String()})
+		ts := callTool(t, srv, toolThoughtStatus, map[string]any{"taskId": taskID.String()})
 		if ts["status"] != "NoQuorum" {
 			t.Fatalf("thought_status=%v, want NoQuorum", ts["status"])
 		}
@@ -141,7 +141,7 @@ func TestQuorumStatusMatchesSettleAfterWithdrawRace(t *testing.T) {
 			env.submitVerdict(k, taskID, spec, voteYes, 10000)
 		}
 
-		q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+		q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 		if q["quorumReached"] != true {
 			t.Fatalf("quorumReached=%v, want true", q["quorumReached"])
 		}
@@ -183,7 +183,7 @@ func TestQuorumStatusMatchesSettleAfterWithdrawRace(t *testing.T) {
 			env.deregister(k)
 		}
 
-		q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+		q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 		if got := toInt(t, q["verdictsCounted"]); got != 3 {
 			t.Fatalf("verdictsCounted=%d, want 3 (deregistered-but-bonded verdicts still count)", got)
 		}
@@ -225,7 +225,7 @@ func TestQuorumStatusWinningVoteForNonApproval(t *testing.T) {
 	env.submitVerdict(ops[1], taskID, spec, voteNo, 10000)
 	env.submitVerdict(ops[2], taskID, spec, voteYes, 10000)
 
-	q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+	q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 	if q["quorumReached"] != true {
 		t.Fatalf("quorumReached=%v, want true (NO group of 2 >= threshold 2)", q["quorumReached"])
 	}
@@ -282,7 +282,7 @@ func TestQuorumStatusDeadlineGate(t *testing.T) {
 	}
 
 	// Mid-window: quorum reached, but the deadline has NOT passed -> not settleable.
-	q := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+	q := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 	if q["quorumReached"] != true {
 		t.Fatalf("quorumReached=%v, want true", q["quorumReached"])
 	}
@@ -295,7 +295,7 @@ func TestQuorumStatusDeadlineGate(t *testing.T) {
 
 	// Advance past the 1h voting window; now the quorum is settleable.
 	env.c.advanceSeconds(2 * 3600)
-	q2 := callTool(t, srv, toolQuorumStatus, map[string]interface{}{"taskId": taskID.String()})
+	q2 := callTool(t, srv, toolQuorumStatus, map[string]any{"taskId": taskID.String()})
 	if q2["deadlinePassed"] != true {
 		t.Fatalf("deadlinePassed=%v, want true after the window", q2["deadlinePassed"])
 	}

@@ -25,9 +25,9 @@ func okTool(name string) Tool {
 	return Tool{
 		Name:        name,
 		Description: name,
-		InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
-		Read: func(_ context.Context, _ map[string]interface{}) (interface{}, *ChainObservation, error) {
-			return map[string]interface{}{"ok": true, "tool": name}, nil, nil
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Read: func(_ context.Context, _ map[string]any) (any, *ChainObservation, error) {
+			return map[string]any{"ok": true, "tool": name}, nil, nil
 		},
 	}
 }
@@ -38,8 +38,8 @@ func blockingTool(name string) Tool {
 	return Tool{
 		Name:        name,
 		Description: name,
-		InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
-		Read: func(ctx context.Context, _ map[string]interface{}) (interface{}, *ChainObservation, error) {
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Read: func(ctx context.Context, _ map[string]any) (any, *ChainObservation, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		},
@@ -51,8 +51,8 @@ func panicTool(name string) Tool {
 	return Tool{
 		Name:        name,
 		Description: name,
-		InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
-		Read: func(_ context.Context, _ map[string]interface{}) (interface{}, *ChainObservation, error) {
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Read: func(_ context.Context, _ map[string]any) (any, *ChainObservation, error) {
 			panic("kaboom")
 		},
 	}
@@ -86,17 +86,17 @@ func TestPerCallTimeoutDoesNotWedgeServer(t *testing.T) {
 	}
 
 	// 1) The blocked call returns a tool error (isError=true) mentioning a deadline.
-	r1 := resps[0]["result"].(map[string]interface{})
+	r1 := resps[0]["result"].(map[string]any)
 	if r1["isError"] != true {
 		t.Fatalf("blocked call should be isError, got: %v", resps[0])
 	}
-	txt := r1["content"].([]interface{})[0].(map[string]interface{})["text"].(string)
+	txt := r1["content"].([]any)[0].(map[string]any)["text"].(string)
 	if !strings.Contains(strings.ToLower(txt), "deadline") && !strings.Contains(strings.ToLower(txt), "context") {
 		t.Fatalf("blocked call error %q does not look like a timeout", txt)
 	}
 
 	// 2) The SECOND request was answered — the server is still responsive.
-	r2 := resps[1]["result"].(map[string]interface{})
+	r2 := resps[1]["result"].(map[string]any)
 	if _, ok := r2["content"]; !ok {
 		t.Fatalf("second request not answered (server wedged?): %v", resps[1])
 	}
@@ -155,7 +155,7 @@ func TestOversizedLineIsRejectedAndLoopSurvives(t *testing.T) {
 	if resps[0]["error"] == nil {
 		t.Fatalf("oversized line should yield a parse error, got: %v", resps[0])
 	}
-	em := resps[0]["error"].(map[string]interface{})
+	em := resps[0]["error"].(map[string]any)
 	if int(em["code"].(float64)) != codeParseError {
 		t.Fatalf("oversized line error code=%v, want %d", em["code"], codeParseError)
 	}
@@ -216,21 +216,21 @@ func TestEmptyToolNameRejected(t *testing.T) {
 }
 
 func TestNilReadHandlerRejected(t *testing.T) {
-	bad := Tool{Name: "noread", Description: "noread", InputSchema: map[string]interface{}{"type": "object"}}
+	bad := Tool{Name: "noread", Description: "noread", InputSchema: map[string]any{"type": "object"}}
 	if _, err := NewServer(fakeSurface{tools: []Tool{bad}}); err == nil {
 		t.Fatal("expected a nil-Read-handler error, got nil")
 	}
 }
 
 // decodeLines parses newline-delimited JSON-RPC responses.
-func decodeLines(t *testing.T, s string) []map[string]interface{} {
+func decodeLines(t *testing.T, s string) []map[string]any {
 	t.Helper()
-	var out []map[string]interface{}
+	var out []map[string]any
 	r := bufio.NewReader(strings.NewReader(s))
 	for {
 		line, err := r.ReadString('\n')
 		if tl := strings.TrimSpace(line); tl != "" {
-			var m map[string]interface{}
+			var m map[string]any
 			if jerr := json.Unmarshal([]byte(tl), &m); jerr != nil {
 				t.Fatalf("bad response line: %s", tl)
 			}

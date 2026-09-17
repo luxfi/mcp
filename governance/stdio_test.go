@@ -48,8 +48,8 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	if idNum(init["id"]) != 1 {
 		t.Fatalf("initialize response id=%v, want 1", init["id"])
 	}
-	result := init["result"].(map[string]interface{})
-	si := result["serverInfo"].(map[string]interface{})
+	result := init["result"].(map[string]any)
+	si := result["serverInfo"].(map[string]any)
 	if si["name"] != mcp.ServerName {
 		t.Fatalf("serverInfo.name=%v, want %s", si["name"], mcp.ServerName)
 	}
@@ -58,18 +58,18 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	}
 
 	// 2) tools/list: exactly 8 tools.
-	list := resps[1]["result"].(map[string]interface{})
-	tools := list["tools"].([]interface{})
+	list := resps[1]["result"].(map[string]any)
+	tools := list["tools"].([]any)
 	if len(tools) != 8 {
 		t.Fatalf("tools/list returned %d tools, want 8", len(tools))
 	}
 	// Each tool descriptor must carry name + inputSchema (the MCP shape).
 	for _, tl := range tools {
-		td := tl.(map[string]interface{})
+		td := tl.(map[string]any)
 		if _, ok := td["name"].(string); !ok {
 			t.Fatalf("tool descriptor missing name: %v", td)
 		}
-		if _, ok := td["inputSchema"].(map[string]interface{}); !ok {
+		if _, ok := td["inputSchema"].(map[string]any); !ok {
 			t.Fatalf("tool descriptor missing inputSchema: %v", td)
 		}
 	}
@@ -77,20 +77,20 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	// 3) tools/call(chain_state): content[0].text is a JSON object carrying the tool VALUE
 	//    plus the verifiable observation. The chain_state fields live under "value"; the
 	//    observation under "observation" (the MED-8 wiring — every result is bindable).
-	call := resps[2]["result"].(map[string]interface{})
-	content := call["content"].([]interface{})
+	call := resps[2]["result"].(map[string]any)
+	content := call["content"].([]any)
 	if len(content) != 1 {
 		t.Fatalf("tools/call content length=%d, want 1", len(content))
 	}
-	block := content[0].(map[string]interface{})
+	block := content[0].(map[string]any)
 	if block["type"] != "text" {
 		t.Fatalf("content type=%v, want text", block["type"])
 	}
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal([]byte(block["text"].(string)), &payload); err != nil {
 		t.Fatalf("chain_state text not JSON: %v", err)
 	}
-	state, ok := payload["value"].(map[string]interface{})
+	state, ok := payload["value"].(map[string]any)
 	if !ok {
 		t.Fatalf("tool result missing value object: %v", payload)
 	}
@@ -106,7 +106,7 @@ func TestStdioServeRoundTrip(t *testing.T) {
 	}
 
 	// The observation must be present and carry a binding hash + the tool name.
-	obs, ok := payload["observation"].(map[string]interface{})
+	obs, ok := payload["observation"].(map[string]any)
 	if !ok {
 		t.Fatalf("tool result missing observation object: %v", payload)
 	}
@@ -141,14 +141,14 @@ func TestStdioUnknownToolIsError(t *testing.T) {
 }
 
 // decodeLines parses newline-delimited JSON-RPC responses.
-func decodeLines(t *testing.T, s string) []map[string]interface{} {
+func decodeLines(t *testing.T, s string) []map[string]any {
 	t.Helper()
-	var out []map[string]interface{}
+	var out []map[string]any
 	r := bufio.NewReader(strings.NewReader(s))
 	for {
 		line, err := r.ReadString('\n')
 		if t := strings.TrimSpace(line); t != "" {
-			var m map[string]interface{}
+			var m map[string]any
 			if jerr := json.Unmarshal([]byte(t), &m); jerr != nil {
 				panic("bad response line: " + t)
 			}
@@ -165,7 +165,7 @@ func decodeLines(t *testing.T, s string) []map[string]interface{} {
 }
 
 // idNum extracts a numeric JSON-RPC id (decoded as float64).
-func idNum(v interface{}) int {
+func idNum(v any) int {
 	if f, ok := v.(float64); ok {
 		return int(f)
 	}

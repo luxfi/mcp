@@ -105,7 +105,7 @@ func dedupLastWins(reads []ObservedFact) []ObservedFact {
 		return reads
 	}
 	out := reads[:0]
-	for i := 0; i < len(reads); i++ {
+	for i := range reads {
 		// Skip this entry if the NEXT entry has the same key (a later writer wins).
 		if i+1 < len(reads) && reads[i+1].Key == reads[i].Key {
 			continue
